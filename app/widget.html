@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Contact Weather</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #f4f6f9;
+      color: #2c3e50;
+      padding: 12px;
+      font-size: 13px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .address { font-size: 12px; color: #7f8c8d; margin-bottom: 4px; }
+    .resolved-location { font-size: 12px; color: #7f8c8d; margin-bottom: 10px; }
+    .resolved-location b { color: #34495e; }
+    .mismatch-warning {
+      background: #fff4e5;
+      border: 1px solid #f0c987;
+      color: #8a5a00;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .current-main { display: flex; align-items: center; gap: 12px; }
+    .current-main img { width: 56px; height: 56px; }
+    .temp { font-size: 32px; font-weight: 600; }
+    .cond { font-size: 14px; color: #555; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .stat { background: #f0f4f8; border-radius: 6px; padding: 6px 10px; flex: 1 1 45%; min-width: 110px; }
+    .stat .label { font-size: 11px; color: #7f8c8d; }
+    .stat .value { font-size: 13px; font-weight: 600; }
+    h3 {
+      font-size: 13px; color: #34495e; margin-bottom: 8px;
+      border-bottom: 1px solid #eee; padding-bottom: 4px;
+    }
+    .day-row {
+      display: flex; align-items: center; gap: 10px; padding: 6px 0;
+      border-bottom: 1px solid #f2f2f2;
+    }
+    .day-row:last-child { border-bottom: none; }
+    .day-row img { width: 32px; height: 32px; }
+    .day-date { width: 78px; font-weight: 600; font-size: 12px; }
+    .day-cond { flex: 1; color: #555; font-size: 12px; }
+    .day-temps { font-size: 12px; white-space: nowrap; }
+    .day-rain { font-size: 11px; color: #2980b9; white-space: nowrap; }
+
+    .hourly-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .hour-card {
+      flex: 0 0 auto;
+      min-width: 58px;
+      text-align: center;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 8px 4px;
+    }
+    .hour-card.now { background: #e8f1fb; border: 1px solid #bcd6ef; }
+    .hour-time { font-size: 11px; color: #7f8c8d; margin-bottom: 4px; }
+    .hour-card img { width: 26px; height: 26px; }
+    .hour-temp { font-size: 12px; font-weight: 600; margin-top: 2px; }
+    .hour-rain { font-size: 10px; color: #2980b9; margin-top: 2px; }
+
+    .local-time { font-size: 12px; color: #34495e; font-weight: 600; margin-bottom: 4px; }
+    .powered-by {
+      text-align: right;
+      font-size: 10px;
+      color: #b0b8bf;
+      padding: 4px 2px 12px;
+    }
+    .powered-by a { color: #9aa4ad; text-decoration: none; }
+    .powered-by a:hover { text-decoration: underline; }
+
+    #loading, #error { text-align: center; padding: 30px 10px; color: #7f8c8d; }
+    #error { color: #c0392b; display: none; }
+    .spinner {
+      border: 3px solid #eee; border-top: 3px solid #3498db; border-radius: 50%;
+      width: 26px; height: 26px; margin: 0 auto 8px; animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #content { display: none; }
+  </style>
+</head>
+<body>
+
+  <div id="loading">
+    <div id="addr-preview" style="display:none; background:#fff; border-radius:8px; padding:10px; margin-bottom:12px; text-align:left; font-size:12px; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <div style="color:#7f8c8d; font-size:11px; margin-bottom:4px;">Address from contact record (widget side):</div>
+      <div id="addr-preview-text" style="font-weight:600; color:#2c3e50;"></div>
+    </div>
+    <div class="spinner"></div>
+    <span id="loading-text">Loading weather...</span>
+  </div>
+
+  <div id="error"></div>
+
+  <div id="content">
+    <div class="card">
+      <div class="mismatch-warning" id="mismatch-warning" style="display:none;"></div>
+      <div class="address" id="address"></div>
+      <div class="resolved-location" id="resolved-location"></div>
+      <div class="local-time" id="local-time"></div>
+      <div class="current-main">
+        <img id="cur-icon" src="" alt="" />
+        <div>
+          <div class="temp" id="cur-temp"></div>
+          <div class="cond" id="cur-cond"></div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">Feels Like</div><div class="value" id="cur-feels"></div></div>
+        <div class="stat"><div class="label">Humidity</div><div class="value" id="cur-hum"></div></div>
+        <div class="stat"><div class="label">Wind</div><div class="value" id="cur-wind"></div></div>
+        <div class="stat"><div class="label">UV Index</div><div class="value" id="cur-uv"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Hourly Timeline</h3>
+      <div class="hourly-strip" id="hourly"></div>
+    </div>
+
+    <div class="card">
+      <h3>Yesterday</h3>
+      <div id="yesterday"></div>
+    </div>
+
+    <div class="card">
+      <h3>3 Day Forecast</h3>
+      <div id="forecast"></div>
+    </div>
+
+    <div class="powered-by">Powered by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a></div>
+  </div>
+
+  <script src="ZohoEmbededAppSDK.min.js"></script>
+  <script>
+    var FUNC_NAME = "limongetweatherdetails__get_weather_details2";
+
+    function showError(msg) {
+      document.getElementById("loading").style.display = "none";
+      var el = document.getElementById("error");
+      el.innerText = msg;
+      el.style.display = "block";
+    }
+
+    function fixIcon(url) {
+      if (!url) return "";
+      if (url.indexOf("//") === 0) return "https:" + url;
+      return url;
+    }
+
+    function dayRow(d) {
+      var day = d.day || {};
+      var cond = day.condition || {};
+      return '<div class="day-row">' +
+        '<div class="day-date">' + d.date + '</div>' +
+        '<img src="' + fixIcon(cond.icon) + '" alt="" />' +
+        '<div class="day-cond">' + (cond.text || "-") + '</div>' +
+        '<div class="day-temps">' + day.maxtemp_c + '&deg; / ' + day.mintemp_c + '&deg;C</div>' +
+        '<div class="day-rain">&#128167; ' + (day.daily_chance_of_rain || 0) + '%</div>' +
+      '</div>';
+    }
+
+    function normalize(s) {
+      return (s || "").toLowerCase().trim();
+    }
+
+    function checkCountryMismatch(enteredCountry, resolvedCountry) {
+      var el = document.getElementById("mismatch-warning");
+      var a = normalize(enteredCountry);
+      var b = normalize(resolvedCountry);
+      if (!a || !b) { el.style.display = "none"; return; }
+      var matches = (a.indexOf(b) !== -1) || (b.indexOf(a) !== -1);
+      if (!matches) {
+        el.innerHTML = "&#9888; This result may not match the contact's real address — the country typed (\"" +
+          enteredCountry + "\") doesn't match what WeatherAPI found (\"" + resolvedCountry +
+          "\"). Double-check for a typo in the mailing address.";
+        el.style.display = "block";
+      } else {
+        el.style.display = "none";
+      }
+    }
+
+    function formatLocalTime(localtimeStr) {
+      // localtimeStr looks like "2026-07-02 14:34"
+      if (!localtimeStr) return "";
+      var parts = localtimeStr.split(" ");
+      var datePart = parts[0];
+      var hm = (parts[1] || "00:00").split(":");
+      var hour = parseInt(hm[0], 10);
+      var minute = hm[1];
+      var ampm = hour >= 12 ? "PM" : "AM";
+      var h12 = hour % 12;
+      if (h12 === 0) h12 = 12;
+      var d = new Date(datePart + "T00:00:00");
+      var weekday = d.toLocaleDateString(undefined, { weekday: "long" });
+      var niceDate = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return weekday + ", " + niceDate + " \u2014 " + h12 + ":" + minute + " " + ampm;
+    }
+
+    function formatHourLabel(timeStr) {
+      // timeStr looks like "2026-07-02 14:00"
+      var hm = (timeStr.split(" ")[1] || "00:00").split(":");
+      var hour = parseInt(hm[0], 10);
+      var ampm = hour >= 12 ? "PM" : "AM";
+      var h12 = hour % 12;
+      if (h12 === 0) h12 = 12;
+      return h12 + ampm;
+    }
+
+    function buildHourlyWindow(result) {
+      // Gather hours from yesterday + today + tomorrow (if present) into one flat list
+      var allHours = [];
+
+      var y = result.yesterday || {};
+      if (y.forecast && y.forecast.forecastday && y.forecast.forecastday[0]) {
+        allHours = allHours.concat(y.forecast.forecastday[0].hour || []);
+      }
+
+      var fc = result.forecast || {};
+      var days = (fc.forecast && fc.forecast.forecastday) ? fc.forecast.forecastday : [];
+      for (var i = 0; i < days.length; i++) {
+        allHours = allHours.concat(days[i].hour || []);
+      }
+
+      // "Now" reference = the contact location's current local epoch, not the viewer's browser time
+      var loc = fc.location || {};
+      var nowEpoch = loc.localtime_epoch || Math.floor(Date.now() / 1000);
+
+      var windowStart = nowEpoch - 24 * 3600;
+      var windowEnd = nowEpoch + 24 * 3600;
+
+      var windowed = allHours.filter(function (h) {
+        return h.time_epoch && h.time_epoch >= windowStart && h.time_epoch <= windowEnd;
+      });
+
+      windowed.sort(function (a, b) { return a.time_epoch - b.time_epoch; });
+
+      return { hours: windowed, nowEpoch: nowEpoch };
+    }
+
+    function renderHourly(result) {
+      var strip = document.getElementById("hourly");
+      var built = buildHourlyWindow(result);
+      var hours = built.hours;
+      var nowEpoch = built.nowEpoch;
+
+      if (!hours.length) {
+        strip.innerHTML = '<div style="color:#7f8c8d;font-size:12px;">No hourly data</div>';
+        return;
+      }
+
+      // Find the hour slot closest to "now" (within the current hour) to mark as "Now"
+      var nowIndex = -1;
+      var bestDiff = Infinity;
+      for (var i = 0; i < hours.length; i++) {
+        var diff = Math.abs(hours[i].time_epoch - nowEpoch);
+        if (diff < bestDiff) { bestDiff = diff; nowIndex = i; }
+      }
+
+      var html = "";
+      for (var j = 0; j < hours.length; j++) {
+        var h = hours[j];
+        var cond = h.condition || {};
+        var isNow = (j === nowIndex);
+        var isPast = h.time_epoch < nowEpoch - 1800 && !isNow;
+        var dayLabel = "";
+        // Show a small date tag at the start of each new calendar day in the strip
+        if (j === 0 || h.time.split(" ")[0] !== hours[j - 1].time.split(" ")[0]) {
+          var dObj = new Date(h.time.split(" ")[0] + "T00:00:00");
+          dayLabel = dObj.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+        }
+        html += '<div class="hour-card' + (isNow ? ' now' : '') + '" style="' + (isPast ? 'opacity:0.45;' : '') + '">' +
+          (dayLabel ? '<div style="font-size:9px;color:#b0b8bf;font-weight:700;">' + dayLabel + '</div>' : '<div style="font-size:9px;">&nbsp;</div>') +
+          '<div class="hour-time">' + (isNow ? "Now" : formatHourLabel(h.time)) + '</div>' +
+          '<img src="' + fixIcon(cond.icon) + '" alt="" />' +
+          '<div class="hour-temp">' + Math.round(h.temp_c) + '&deg;</div>' +
+          '<div class="hour-rain">' + (h.chance_of_rain || 0) + '%</div>' +
+        '</div>';
+      }
+      strip.innerHTML = html;
+
+      setTimeout(function () {
+        var nowCard = strip.querySelector(".hour-card.now");
+        if (nowCard) {
+          strip.scrollLeft = nowCard.offsetLeft - 60;
+        }
+      }, 50);
+    }
+
+    function render(result) {
+      if (result.error) {
+        showError(result.error);
+        return;
+      }
+
+      var fc = result.forecast || {};
+      var current = fc.current || {};
+      var cond = current.condition || {};
+      var days = (fc.forecast && fc.forecast.forecastday) ? fc.forecast.forecastday : [];
+
+      document.getElementById("address").innerText = "Searched Address: " + (result.address || "(empty)");
+      var loc = fc.location || {};
+      var resolvedParts = [loc.name, loc.region, loc.country].filter(function (p) { return p && p.length; });
+      document.getElementById("resolved-location").innerHTML =
+        "Location found by WeatherAPI: <b>" + (resolvedParts.join(", ") || "(unknown)") + "</b>";
+      checkCountryMismatch(result.enteredCountry, loc.country);
+      document.getElementById("local-time").innerText = formatLocalTime(loc.localtime);
+      document.getElementById("cur-icon").src = fixIcon(cond.icon);
+      document.getElementById("cur-temp").innerText = current.temp_c + "\u00B0C";
+      document.getElementById("cur-cond").innerText = cond.text || "";
+      document.getElementById("cur-feels").innerText = current.feelslike_c + "\u00B0C";
+      document.getElementById("cur-hum").innerText = current.humidity + "%";
+      document.getElementById("cur-wind").innerText = current.wind_kph + " km/h " + (current.wind_dir || "");
+      document.getElementById("cur-uv").innerText = current.uv;
+
+      // Hourly timeline (48h window: 24h back, 24h forward, centered on "now" at the location)
+      renderHourly(result);
+
+      // Yesterday block
+      var yHtml = '<div style="color:#7f8c8d;font-size:12px;">No data</div>';
+      var y = result.yesterday || {};
+      if (y.forecast && y.forecast.forecastday && y.forecast.forecastday.length > 0) {
+        yHtml = dayRow(y.forecast.forecastday[0]);
+      }
+      document.getElementById("yesterday").innerHTML = yHtml;
+
+      // Forecast block
+      var fHtml = "";
+      for (var i = 0; i < days.length; i++) {
+        fHtml += dayRow(days[i]);
+      }
+      document.getElementById("forecast").innerHTML = fHtml || '<div style="color:#7f8c8d;font-size:12px;">No data</div>';
+
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("content").style.display = "block";
+    }
+
+    function startWidget() {
+      ZOHO.embeddedApp.on("PageLoad", function (data) {
+        var recordId = data.EntityId;
+        if (Object.prototype.toString.call(recordId) === "[object Array]") {
+          recordId = recordId[0];
+        }
+        if (!recordId) {
+          showError("Could not read record ID.");
+          return;
+        }
+
+        ZOHO.CRM.API.getRecord({ Entity: "Contacts", RecordID: recordId.toString() })
+          .then(function (r) {
+            var c = (r && r.data && r.data[0]) ? r.data[0] : {};
+            var parts = [c.Mailing_Street, c.Mailing_City, c.Mailing_State, c.Mailing_Zip, c.Mailing_Country];
+            var addr = "";
+            for (var i = 0; i < parts.length; i++) { if (parts[i]) { addr += parts[i] + " "; } }
+            addr = addr.trim();
+            var box = document.getElementById("addr-preview");
+            if (addr === "") {
+              document.getElementById("addr-preview-text").innerText = "(No mailing address found on this contact)";
+              document.getElementById("addr-preview-text").style.color = "#c0392b";
+            } else {
+              document.getElementById("addr-preview-text").innerText = addr;
+            }
+            box.style.display = "block";
+            document.getElementById("loading-text").innerText = "Address found. Loading weather...";
+          })
+          .catch(function (e) { console.log("getRecord failed:", e); });
+
+        var req_data = { "arguments": JSON.stringify({ "contactId": recordId.toString() }) };
+
+        ZOHO.CRM.FUNCTIONS.execute(FUNC_NAME, req_data)
+          .then(function (resp) {
+            console.log(resp);
+            try {
+              var out = resp && resp.details ? resp.details.output : null;
+              if (!out) { showError("Function returned empty response."); return; }
+              var result = (typeof out === "string") ? JSON.parse(out) : out;
+              render(result);
+            } catch (e) {
+              showError("Could not parse weather data: " + e.message);
+              console.log("Raw response:", resp);
+            }
+          })
+          .catch(function (err) {
+            showError("Function call failed. Check function name and access.");
+            console.log(err);
+          });
+      });
+
+      ZOHO.embeddedApp.init();
+    }
+
+    var sdkTries = 0;
+    var sdkTimer = setInterval(function () {
+      sdkTries++;
+      if (typeof ZOHO !== "undefined" && ZOHO.embeddedApp) {
+        clearInterval(sdkTimer);
+        startWidget();
+      } else if (sdkTries >= 40) {
+        clearInterval(sdkTimer);
+        showError("Zoho SDK not loaded even after 10 sec.");
+      }
+    }, 250);
+  </script>
+</body>
+</html>

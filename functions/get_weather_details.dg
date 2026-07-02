@@ -1,0 +1,82 @@
+// Function name in Zoho: get_weather_details
+// Trigger: Standalone function, invoked from the widget via ZOHO.CRM.FUNCTIONS.execute()
+//
+// SECURITY NOTE:
+// The WeatherAPI.com key is NOT hardcoded here. It is pulled at runtime from a
+// Zoho CRM Variable ("weatherapi_key") using zoho.crm.getOrgVariable(). This
+// keeps the key out of source control. See README.md > "Setting up the API key"
+// for how to create that variable in your own Zoho CRM.
+
+weatherapi_key = zoho.crm.getOrgVariable("weatherapi_key");
+
+crmMap = crmAPIRequest.toMap();
+paramsMap = crmMap.get("params");
+argumentsStr = paramsMap.get("arguments");
+argsMap = argumentsStr.toMap();
+contactId = argsMap.get("contactId");
+
+contactRec = zoho.crm.getRecordById("Contacts",contactId);
+
+street = ifnull(contactRec.get("Mailing_Street"),"");
+city = ifnull(contactRec.get("Mailing_City"),"");
+state = ifnull(contactRec.get("Mailing_State"),"");
+zipcode = ifnull(contactRec.get("Mailing_Zip"),"");
+country = ifnull(contactRec.get("Mailing_Country"),"");
+
+addressQuery = (street + " " + city + " " + state + " " + zipcode + " " + country).trim();
+
+response = Map();
+
+if(addressQuery == "")
+{
+	response.put("error","This contact has no mailing address on file.");
+	return response;
+}
+
+if(weatherapi_key == null || weatherapi_key == "")
+{
+	response.put("error","WeatherAPI key is not configured. Set the 'weatherapi_key' CRM Variable.");
+	return response;
+}
+
+forecastParams = Map();
+forecastParams.put("key",weatherapi_key);
+forecastParams.put("q",addressQuery);
+forecastParams.put("days","3");
+forecastParams.put("aqi","no");
+forecastParams.put("alerts","no");
+
+forecastResp = invokeurl
+[
+	url :"https://api.weatherapi.com/v1/forecast.json"
+	type :GET
+	parameters:forecastParams
+];
+
+if(forecastResp.containKey("error"))
+{
+	response.put("error","Weather lookup failed: " + forecastResp.get("error").get("message"));
+	return response;
+}
+
+yesterdayDate = zoho.currentdate.subDay(1).toString("yyyy-MM-dd");
+
+historyParams = Map();
+historyParams.put("key",weatherapi_key);
+historyParams.put("q",addressQuery);
+historyParams.put("dt",yesterdayDate);
+
+historyResp = invokeurl
+[
+	url :"https://api.weatherapi.com/v1/history.json"
+	type :GET
+	parameters:historyParams
+];
+
+response.put("address",addressQuery);
+response.put("enteredCountry",country);
+response.put("enteredCity",city);
+response.put("forecast",forecastResp);
+response.put("yesterday",historyResp);
+
+return response;

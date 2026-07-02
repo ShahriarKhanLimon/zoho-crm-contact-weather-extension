@@ -1,0 +1,13 @@
+# Secrets - never commit real keys
+.env
+secrets.dg
+*.key
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# Packaged extension builds
+*.zip
+/build/
